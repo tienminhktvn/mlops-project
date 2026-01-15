@@ -77,7 +77,7 @@ def main():
     data_ingestion(input_path=INPUT_CSV, output_path=RAW_DATA_ARTIFACT)
 
     # Step 2: Preprocessing
-    print("\n[2/4] Running Preprocessing...")
+    print("[2/4] Running Preprocessing...")
     preprocessing(
         input_path=RAW_DATA_ARTIFACT,
         output_data_path=PROCESSED_DATA_ARTIFACT,
@@ -85,7 +85,7 @@ def main():
     )
 
     # Step 3: Training
-    print("\n[3/4] Running Training...")
+    print("[3/4] Running Training...")
     training(
         input_path=PROCESSED_DATA_ARTIFACT,
         model_path=MODEL_ARTIFACT,
@@ -94,7 +94,7 @@ def main():
     )
 
     # Step 4: Evaluation
-    print("\n[4/4] Running Evaluation...")
+    print("[4/4] Running Evaluation...")
     evaluation(
         model_path=MODEL_ARTIFACT,
         data_path=PROCESSED_DATA_ARTIFACT,
