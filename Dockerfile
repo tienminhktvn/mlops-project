@@ -1,6 +1,14 @@
-FROM mirror.gcr.io/library/python:3.9
+FROM python:3.9-slim
+
 WORKDIR /app
-COPY requirements.txt /app/requirements.txt
-COPY src /app/src
-RUN pip install -r /app/requirements.txt
-ENTRYPOINT ["bash"]
+
+COPY requirements.txt .
+
+RUN pip install --upgrade pip && \
+    pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN mkdir -p /app/data /app/output
+
+ENTRYPOINT ["python", "run_pipeline.py"]

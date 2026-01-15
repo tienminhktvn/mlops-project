@@ -1,27 +1,28 @@
-from kfp.v2.dsl import Dataset, Output, component
+import logging
+import os
+
+import pandas as pd
 
 
-@component(
-    base_image="europe-west1-docker.pkg.dev/gen-lang-client-0021096577/vertex-ai-pipeline/training:latest",
-    output_component_file="data_ingestion.yaml",
-)
-def data_ingestion(dataset: Output[Dataset]):
-    import logging
-
-    import pandas as pd
-
+def data_ingestion(input_path: str, output_path: str):
+    """
+    Loads raw data and saves it to the artifact location.
+    """
     logging.basicConfig(level=logging.INFO)
-
     try:
-        BUCKET_NAME = "mlops-gen-lang-client-0021096577"
-        source_path = f"gs://{BUCKET_NAME}/data/Housing.csv"
+        logging.info("--- Starting Ingestion ---")
 
-        logging.info(f"Reading data from: {source_path}")
-        df = pd.read_csv(source_path)
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found at {input_path}")
 
-        df.to_csv(dataset.path, index=False)
-        logging.info("Data ingestion completed.")
+        # Load dataset
+        df = pd.read_csv(input_path)
+        logging.info(f"Data loaded: {df.shape}")
+
+        # Save raw data for the next step
+        df.to_csv(output_path, index=False)
+        logging.info(f"Raw data saved to {output_path}")
 
     except Exception as e:
-        logging.error(f"Error during data ingestion: {e}")
+        logging.error(f"Ingestion failed: {e}")
         raise e

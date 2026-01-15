@@ -1,55 +1,56 @@
-from kfp.v2.dsl import Dataset, Input, Metrics, Model, Output, component
+import json
+import logging
+
+import joblib
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
 
 
-@component(
-    base_image="europe-west1-docker.pkg.dev/gen-lang-client-0021096577/vertex-ai-pipeline/training:latest",
-    output_component_file="training.yaml",
-)
 def training(
-    preprocessed_dataset: Input[Dataset],
-    model: Output[Model],
-    metrics: Output[Metrics],
-    hyperparameters: dict,
+    input_path: str, model_path: str, metrics_path: str, hyperparameters: dict
 ):
-    import logging
-
-    import joblib
-    import pandas as pd
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.metrics import mean_squared_error, r2_score
-    from sklearn.model_selection import train_test_split
-
+    """
+    Trains the Random Forest model and saves artifacts.
+    """
     logging.basicConfig(level=logging.INFO)
-
     try:
-        df = pd.read_csv(preprocessed_dataset.path)
+        logging.info("--- Starting Training ---")
 
-        target_col = "price"
-        X = df.drop(columns=[target_col])
-        y = df[target_col]
+        df = pd.read_csv(input_path)
 
-        X_train, X_val, y_train, y_val = train_test_split(
+        # Split features (X) and target (y) - assuming target is the last column
+        X = df.iloc[:, :-1]
+        y = df.iloc[:, -1]
+
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
 
-        rf_model = RandomForestRegressor(
-            n_estimators=hyperparameters.get("n_estimators", 100),
-            max_depth=hyperparameters.get("max_depth", 10),
-            random_state=hyperparameters.get("random_state", 42),
+        # Initialize and train model
+        model = RandomForestRegressor(
+            n_estimators=hyperparameters["n_estimators"],
+            max_depth=hyperparameters["max_depth"],
+            random_state=hyperparameters["random_state"],
         )
+        model.fit(X_train, y_train)
 
-        rf_model.fit(X_train, y_train)
-        y_pred = rf_model.predict(X_val)
+        # Evaluate model
+        y_pred = model.predict(X_test)
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
 
-        mse = mean_squared_error(y_val, y_pred)
-        r2 = r2_score(y_val, y_pred)
+        # Save model and metrics
+        joblib.dump(model, model_path)
 
-        metrics.log_metric("mean_squared_error", mse)
-        metrics.log_metric("r2_score", r2)
+        metrics = {"mse": mse, "r2": r2}
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f)
 
-        joblib.dump(rf_model, model.path + ".joblib")
-        joblib.dump(rf_model, model.path)
+        logging.info(f"Model saved. Metrics: {metrics}")
 
     except Exception as e:
-        logging.error(f"Error during training: {e}")
+        logging.error(f"Training failed: {e}")
         raise e

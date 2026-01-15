@@ -1,46 +1,110 @@
-from google.cloud import aiplatform
-from kfp.v2 import compiler, dsl
+import os
+import time
 
 from src.data_ingestion import data_ingestion
 from src.evaluation import evaluation
 from src.preprocessing import preprocessing
 from src.training import training
 
-PROJECT_ID = "gen-lang-client-0021096577"
-REGION = "europe-west1"
-BUCKET_NAME = "gs://mlops-gen-lang-client-0021096577"
-PIPELINE_ROOT = f"{BUCKET_NAME}/pipeline_root"
+# Define container paths
+DATA_DIR = "/app/data"
+OUTPUT_DIR = "/app/output"
+
+# Define artifact paths
+INPUT_CSV = os.path.join(DATA_DIR, "Housing.csv")
+RAW_DATA_ARTIFACT = os.path.join(OUTPUT_DIR, "raw_data.csv")
+PROCESSED_DATA_ARTIFACT = os.path.join(OUTPUT_DIR, "processed_data.csv")
+SCALER_ARTIFACT = os.path.join(OUTPUT_DIR, "scaler.joblib")
+MODEL_ARTIFACT = os.path.join(OUTPUT_DIR, "model.joblib")
+METRICS_ARTIFACT = os.path.join(OUTPUT_DIR, "metrics.json")
+PLOT_ARTIFACT = os.path.join(OUTPUT_DIR, "evaluation_plot.png")
 
 
-@dsl.pipeline(name="houseprice-pipeline", pipeline_root=PIPELINE_ROOT)
-def houseprice_pipeline():
-    ingestion_task = data_ingestion()
+def print_pipeline_structure():
+    dag = """
+    ===================================================
+                LOCAL PIPELINE ARCHITECTURE
+    ===================================================
 
-    preprocessing_task = preprocessing(input_dataset=ingestion_task.outputs["dataset"])
+    [ Input: Housing.csv ]
+            |
+            v
+    +-----------------------+
+    |  1. Data Ingestion    |
+    +-----------------------+
+            |
+            v
+    [ Artifact: raw_data.csv ]
+            |
+            v
+    +-----------------------+
+    |  2. Preprocessing     | ----> [ Artifact: scaler.joblib ]
+    +-----------------------+
+            |
+            v
+    [ Artifact: processed_data.csv ]
+            |
+            v
+    +-----------------------+
+    |  3. Training          | ----> [ Artifact: metrics.json ]
+    +-----------------------+
+            |
+            v
+    [ Artifact: model.joblib ]
+            |
+            v
+    +-----------------------+
+    |  4. Evaluation        |
+    +-----------------------+
+            |
+            v
+    [ Artifact: evaluation_plot.png ]
 
-    training_task = training(
-        preprocessed_dataset=preprocessing_task.outputs["preprocessed_dataset"],
+    ===================================================
+    """
+    print(dag)
+
+
+def main():
+    # Print the structure definition first
+    print_pipeline_structure()
+
+    print(">>> PIPELINE EXECUTION STARTED...")
+    start_time = time.time()
+
+    # Step 1: Ingestion
+    print("\n[1/4] Running Data Ingestion...")
+    data_ingestion(input_path=INPUT_CSV, output_path=RAW_DATA_ARTIFACT)
+
+    # Step 2: Preprocessing
+    print("\n[2/4] Running Preprocessing...")
+    preprocessing(
+        input_path=RAW_DATA_ARTIFACT,
+        output_data_path=PROCESSED_DATA_ARTIFACT,
+        output_scaler_path=SCALER_ARTIFACT,
+    )
+
+    # Step 3: Training
+    print("\n[3/4] Running Training...")
+    training(
+        input_path=PROCESSED_DATA_ARTIFACT,
+        model_path=MODEL_ARTIFACT,
+        metrics_path=METRICS_ARTIFACT,
         hyperparameters={"n_estimators": 100, "max_depth": 10, "random_state": 42},
     )
 
-    evaluation_task = evaluation(
-        model=training_task.outputs["model"],
-        preprocessed_dataset=preprocessing_task.outputs["preprocessed_dataset"],
+    # Step 4: Evaluation
+    print("\n[4/4] Running Evaluation...")
+    evaluation(
+        model_path=MODEL_ARTIFACT,
+        data_path=PROCESSED_DATA_ARTIFACT,
+        plot_path=PLOT_ARTIFACT,
     )
+
+    elapsed = time.time() - start_time
+    print(f"\n>>> PIPELINE COMPLETED SUCCESSFULLY in {elapsed:.2f} seconds.")
+    print(f">>> Check {OUTPUT_DIR} for artifacts.")
 
 
 if __name__ == "__main__":
-    compiler.Compiler().compile(
-        pipeline_func=houseprice_pipeline, package_path="houseprice_pipeline.json"
-    )
-
-    aiplatform.init(project=PROJECT_ID, location=REGION)
-
-    job = aiplatform.PipelineJob(
-        display_name="houseprice_pipeline_job",
-        template_path="houseprice_pipeline.json",
-        pipeline_root=PIPELINE_ROOT,
-        enable_caching=False,
-    )
-
-    job.submit()
+    main()

@@ -1,55 +1,51 @@
-from kfp.v2.dsl import Dataset, Input, Output, component
+import logging
+
+import joblib
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
-@component(
-    base_image="europe-west1-docker.pkg.dev/gen-lang-client-0021096577/vertex-ai-pipeline/training:latest",
-    output_component_file="preprocessing.yaml",
-)
-def preprocessing(
-    input_dataset: Input[Dataset],
-    preprocessed_dataset: Output[Dataset],
-):
-    import logging
-
-    import pandas as pd
-    from sklearn.preprocessing import StandardScaler
-
+def preprocessing(input_path: str, output_data_path: str, output_scaler_path: str):
+    """
+    Preprocesses data: Scales numeric features and encodes categorical ones.
+    """
     logging.basicConfig(level=logging.INFO)
-
     try:
-        df = pd.read_csv(input_dataset.path)
+        logging.info("--- Starting Preprocessing ---")
 
+        df = pd.read_csv(input_path)
+
+        # Separate features and target
         target_col = "price"
         X = df.drop(columns=[target_col])
         y = df[target_col]
 
-        binary_cols = [
-            "mainroad",
-            "guestroom",
-            "basement",
-            "hotwaterheating",
-            "airconditioning",
-            "prefarea",
-        ]
+        # Identify column types
+        numeric_features = X.select_dtypes(include=["int64", "float64"]).columns
+        categorical_features = X.select_dtypes(include=["object"]).columns
 
-        def binary_map(x):
-            return x.map({"yes": 1, "no": 0})
+        # Define transformers
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("num", StandardScaler(), numeric_features),
+                ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features),
+            ]
+        )
 
-        X[binary_cols] = X[binary_cols].apply(binary_map)
+        # Apply transformations
+        X_processed = preprocessor.fit_transform(X)
 
-        if "furnishingstatus" in X.columns:
-            status = pd.get_dummies(X["furnishingstatus"], drop_first=True)
-            X = pd.concat([X, status], axis=1)
-            X.drop("furnishingstatus", axis=1, inplace=True)
-            X = X.astype(int)
+        # Reconstruct DataFrame and attach target
+        processed_data = pd.DataFrame(X_processed)
+        processed_data["target"] = y.values
 
-        scaler = StandardScaler()
-        X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+        # Save processed data and the scaler object
+        processed_data.to_csv(output_data_path, index=False)
+        joblib.dump(preprocessor, output_scaler_path)
 
-        df_processed = pd.concat([X_scaled, y], axis=1)
-
-        df_processed.to_csv(preprocessed_dataset.path, index=False)
+        logging.info(f"Preprocessed data saved to {output_data_path}")
 
     except Exception as e:
-        logging.error(f"Error during preprocessing: {e}")
+        logging.error(f"Preprocessing failed: {e}")
         raise e

@@ -1,8 +1,2 @@
-.env
 __pycache__/
 venv/
-data_ingestion.yaml
-evaluation.yaml
-preprocessing.yaml
-training.yaml
-houseprice_pipeline.json
