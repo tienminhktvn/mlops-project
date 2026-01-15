@@ -20,55 +20,7 @@ METRICS_ARTIFACT = os.path.join(OUTPUT_DIR, "metrics.json")
 PLOT_ARTIFACT = os.path.join(OUTPUT_DIR, "evaluation_plot.png")
 
 
-def print_pipeline_structure():
-    dag = """
-    ===================================================
-                LOCAL PIPELINE ARCHITECTURE
-    ===================================================
-
-    [ Input: Housing.csv ]
-            |
-            v
-    +-----------------------+
-    |  1. Data Ingestion    |
-    +-----------------------+
-            |
-            v
-    [ Artifact: raw_data.csv ]
-            |
-            v
-    +-----------------------+
-    |  2. Preprocessing     | ----> [ Artifact: scaler.joblib ]
-    +-----------------------+
-            |
-            v
-    [ Artifact: processed_data.csv ]
-            |
-            v
-    +-----------------------+
-    |  3. Training          | ----> [ Artifact: metrics.json ]
-    +-----------------------+
-            |
-            v
-    [ Artifact: model.joblib ]
-            |
-            v
-    +-----------------------+
-    |  4. Evaluation        |
-    +-----------------------+
-            |
-            v
-    [ Artifact: evaluation_plot.png ]
-
-    ===================================================
-    """
-    print(dag)
-
-
 def main():
-    # Print the structure definition first
-    print_pipeline_structure()
-
     print(">>> PIPELINE EXECUTION STARTED...")
     start_time = time.time()
 
